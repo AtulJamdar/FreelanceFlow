@@ -1,0 +1,106 @@
+# FreelanceFlow Project API Manual Test Suite
+
+@baseUrl = http://localhost:5000/api/v1
+@contentType = application/json
+
+### 1. Login (To get token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "jane.doe@example.com",
+  "password": "password123"
+}
+
+###
+
+@authToken = {{login.response.body.data.token}}
+
+# Get client ID from database or clients list
+@clientId = 64f1a2b3c4d5e6f7a8b9c0d2
+
+### 2. Create a Project (T-024)
+# @name createProject
+POST {{baseUrl}}/projects
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "clientId": "{{clientId}}",
+  "title": "FreelanceFlow Application",
+  "description": "Full MERN Stack portfolio client management app",
+  "startDate": "2026-06-28",
+  "deadline": "2026-09-01",
+  "totalBudget": 150000,
+  "currency": "INR"
+}
+
+###
+
+@projectId = {{createProject.response.body.data._id}}
+
+### 3. Attempt to create project with invalid dates (T-022 date logic check)
+POST {{baseUrl}}/projects
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "clientId": "{{clientId}}",
+  "title": "Invalid Dates Project",
+  "startDate": "2026-06-28",
+  "deadline": "2026-06-01"
+}
+
+###
+
+### 4. Get projects list with pagination & filters (T-023)
+GET {{baseUrl}}/projects?page=1&limit=10&status=not_started&clientId={{clientId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 5. Get project details (T-024)
+GET {{baseUrl}}/projects/{{projectId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 6. Update project status (T-023 status transition rule check)
+PUT {{baseUrl}}/projects/{{projectId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### 7. Mark project completed (T-023 terminal status)
+PUT {{baseUrl}}/projects/{{projectId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "completed"
+}
+
+###
+
+### 8. Attempt to modify details of completed project (T-023 blocks)
+PUT {{baseUrl}}/projects/{{projectId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Hack New Title"
+}
+
+###
+
+### 9. Archive project (T-023 soft delete)
+DELETE {{baseUrl}}/projects/{{projectId}}
+Authorization: Bearer {{authToken}}
+
+###

@@ -1,0 +1,84 @@
+# FreelanceFlow Milestone API Manual Test Suite
+
+@baseUrl = http://localhost:5000/api/v1
+@contentType = application/json
+
+### 1. Login (To get token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "jane.doe@example.com",
+  "password": "password123"
+}
+
+###
+
+@authToken = {{login.response.body.data.token}}
+
+@projectId = 64f1a2b3c4d5e6f7a8b9c0d3
+
+### 2. Create a Milestone under project (T-028 nested route)
+# @name createMilestone
+POST {{baseUrl}}/projects/{{projectId}}/milestones
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Database Schema Scaffolding",
+  "description": "Establish all collections and composite unique constraints",
+  "amount": 25000,
+  "dueDate": "2026-07-05"
+}
+
+###
+
+@milestoneId = {{createMilestone.response.body.data._id}}
+
+### 3. Get milestones for project (T-028 nested route)
+GET {{baseUrl}}/projects/{{projectId}}/milestones
+Authorization: Bearer {{authToken}}
+
+###
+
+### 4. Get specific milestone details (T-028 standalone route)
+GET {{baseUrl}}/milestones/{{milestoneId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 5. Update milestone details (T-028 standalone route)
+PUT {{baseUrl}}/milestones/{{milestoneId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "description": "Establish all collections and composite unique indexes - Updated",
+  "amount": 30000
+}
+
+###
+
+### 6. Mark milestone complete (T-027 / T-028 patch complete)
+PATCH {{baseUrl}}/milestones/{{milestoneId}}/complete
+Authorization: Bearer {{authToken}}
+
+###
+
+### 7. Attempt to modify details of completed milestone (T-027 blocks)
+PUT {{baseUrl}}/milestones/{{milestoneId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Hack completed milestone"
+}
+
+###
+
+### 8. Attempt to delete completed milestone (T-027 blocks)
+DELETE {{baseUrl}}/milestones/{{milestoneId}}
+Authorization: Bearer {{authToken}}
+
+###

@@ -1,0 +1,2620 @@
+openapi: 3.0.3
+info:
+  title: FreelanceFlow API
+  description: |
+    A self-hosted MERN stack API for freelancers to manage clients, projects, milestones,
+    invoices, and payments. All endpoints (except `/api/v1/auth/register` and `/api/v1/auth/login`)
+    require a valid JWT Bearer token.
+
+    **Error Shape:** All errors follow:
+    ```json
+    {
+      "success": false,
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Human-readable description.",
+        "field": "fieldName"
+      }
+    }
+    ```
+
+    **Success Shape:** All successes follow:
+    ```json
+    {
+      "success": true,
+      "data": { ... }
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: FreelanceFlow API
+  license:
+    name: MIT
+
+servers:
+  - url: https://your-app.onrender.com/api/v1
+    description: Production (Render)
+  - url: http://localhost:5000/api/v1
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Register, login, and manage the authenticated freelancer profile
+  - name: Clients
+    description: CRUD operations for client records
+  - name: Projects
+    description: CRUD operations for projects linked to clients
+  - name: Milestones
+    description: Manage milestones within projects
+  - name: Invoices
+    description: Create, read, update, download, and email invoices
+  - name: Payments
+    description: Record and retrieve payments against invoices
+  - name: Dashboard
+    description: Aggregated business metrics
+  - name: Dev
+    description: Development-only utility endpoints (disabled in production)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECURITY
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Pass the JWT received from `/auth/login` or `/auth/register` as
+        `Authorization: Bearer <token>`. Token expires after 7 days.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REUSABLE SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Primitives & Shared ────────────────────────────────────────────────
+    ObjectId:
+      type: string
+      pattern: '^[a-f\d]{24}$'
+      example: '6676a1b2c3d4e5f6a7b8c9d0'
+      description: MongoDB ObjectId (24-character hex string)
+
+    Timestamp:
+      type: string
+      format: date-time
+      example: '2026-06-28T09:00:00.000Z'
+
+    InvoiceStatus:
+      type: string
+      enum: [draft, sent, partially_paid, paid, overdue]
+      description: Invoice lifecycle status
+
+    ProjectStatus:
+      type: string
+      enum: [not_started, in_progress, on_hold, completed]
+      description: Project lifecycle status
+
+    PaymentMethod:
+      type: string
+      enum: [bank_transfer, upi, cash, paypal, other]
+
+    Currency:
+      type: string
+      default: INR
+      example: INR
+      description: ISO 4217 currency code
+
+    # ── Error ──────────────────────────────────────────────────────────────
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: INVOICE_NOT_FOUND
+        message:
+          type: string
+          example: Invoice with ID xyz does not exist.
+        field:
+          type: string
+          nullable: true
+          example: invoiceId
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    # ── Pagination Metadata ────────────────────────────────────────────────
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 42
+        totalPages:
+          type: integer
+          example: 5
+
+    # ── User / Auth ────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        name:
+          type: string
+          example: Arjun Mehta
+        email:
+          type: string
+          format: email
+          example: arjun@freelanceflow.dev
+        businessName:
+          type: string
+          nullable: true
+          example: Mehta Design Studio
+        phone:
+          type: string
+          nullable: true
+          example: '+91 98765 43210'
+        address:
+          type: string
+          nullable: true
+          example: '42 MG Road, Bengaluru, Karnataka 560001'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Arjun Mehta
+        email:
+          type: string
+          format: email
+          example: arjun@freelanceflow.dev
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: Str0ng#Pass!
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: arjun@freelanceflow.dev
+        password:
+          type: string
+          format: password
+          example: Str0ng#Pass!
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            user:
+              $ref: '#/components/schemas/User'
+
+    UpdateProfileRequest:
+      type: object
+      description: All fields are optional; only include fields to change
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Arjun K. Mehta
+        businessName:
+          type: string
+          example: Mehta Design Studio
+        phone:
+          type: string
+          example: '+91 98765 43210'
+        address:
+          type: string
+          example: '42 MG Road, Bengaluru, Karnataka 560001'
+
+    # ── Client ─────────────────────────────────────────────────────────────
+    Client:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        freelancerId:
+          $ref: '#/components/schemas/ObjectId'
+        name:
+          type: string
+          example: TechStart India Pvt. Ltd.
+        email:
+          type: string
+          format: email
+          example: accounts@techstart.in
+        phone:
+          type: string
+          nullable: true
+          example: '+91 22 6789 0000'
+        company:
+          type: string
+          nullable: true
+          example: TechStart India Pvt. Ltd.
+        address:
+          type: string
+          nullable: true
+          example: 'Level 5, Cyber City, Gurugram, Haryana 122002'
+        notes:
+          type: string
+          nullable: true
+          example: Prefers PDF invoices emailed by the 1st of the month.
+        isArchived:
+          type: boolean
+          default: false
+          example: false
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    ClientWithMeta:
+      allOf:
+        - $ref: '#/components/schemas/Client'
+        - type: object
+          properties:
+            projectCount:
+              type: integer
+              description: Total number of projects linked to this client
+              example: 3
+
+    CreateClientRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: TechStart India Pvt. Ltd.
+        email:
+          type: string
+          format: email
+          example: accounts@techstart.in
+          description: Must be unique per freelancer account
+        phone:
+          type: string
+          example: '+91 22 6789 0000'
+        company:
+          type: string
+          example: TechStart India Pvt. Ltd.
+        address:
+          type: string
+          example: 'Level 5, Cyber City, Gurugram, Haryana 122002'
+        notes:
+          type: string
+          example: Prefers PDF invoices emailed by the 1st of the month.
+
+    UpdateClientRequest:
+      type: object
+      description: All fields optional; only include fields to change
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          description: Must remain unique per freelancer account
+        phone:
+          type: string
+        company:
+          type: string
+        address:
+          type: string
+        notes:
+          type: string
+
+    ClientListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            clients:
+              type: array
+              items:
+                $ref: '#/components/schemas/Client'
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    ClientResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/ClientWithMeta'
+
+    # ── Project ─────────────────────────────────────────────────────────────
+    Project:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        freelancerId:
+          $ref: '#/components/schemas/ObjectId'
+        clientId:
+          $ref: '#/components/schemas/ObjectId'
+        title:
+          type: string
+          example: Brand Identity Redesign
+        description:
+          type: string
+          nullable: true
+          example: Full rebrand including logo, colour palette, and typography guide.
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        startDate:
+          type: string
+          format: date
+          example: '2026-07-01'
+        deadline:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-09-30'
+        totalBudget:
+          type: number
+          nullable: true
+          example: 150000
+        currency:
+          $ref: '#/components/schemas/Currency'
+        isArchived:
+          type: boolean
+          default: false
+          example: false
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    ProjectWithDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            client:
+              $ref: '#/components/schemas/Client'
+            milestones:
+              type: array
+              items:
+                $ref: '#/components/schemas/Milestone'
+            milestoneCount:
+              type: integer
+              example: 4
+            completedMilestoneCount:
+              type: integer
+              example: 2
+            invoiceCount:
+              type: integer
+              example: 1
+
+    CreateProjectRequest:
+      type: object
+      required: [title, clientId, startDate]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Brand Identity Redesign
+        clientId:
+          $ref: '#/components/schemas/ObjectId'
+        description:
+          type: string
+          example: Full rebrand including logo, colour palette, and typography guide.
+        startDate:
+          type: string
+          format: date
+          example: '2026-07-01'
+        deadline:
+          type: string
+          format: date
+          example: '2026-09-30'
+          description: Must be after startDate if provided
+        totalBudget:
+          type: number
+          minimum: 0
+          example: 150000
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+
+    UpdateProjectRequest:
+      type: object
+      description: All fields optional. Status transitions are enforced server-side.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        startDate:
+          type: string
+          format: date
+        deadline:
+          type: string
+          format: date
+          description: Must be after startDate if both are present
+        totalBudget:
+          type: number
+          minimum: 0
+        currency:
+          $ref: '#/components/schemas/Currency'
+
+    ProjectListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            projects:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    ProjectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/ProjectWithDetail'
+
+    # ── Milestone ───────────────────────────────────────────────────────────
+    Milestone:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        projectId:
+          $ref: '#/components/schemas/ObjectId'
+        freelancerId:
+          $ref: '#/components/schemas/ObjectId'
+        title:
+          type: string
+          example: Deliver final logo files
+        description:
+          type: string
+          nullable: true
+          example: SVG, PNG (2x, 3x), and Figma source files.
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-08-15'
+        amount:
+          type: number
+          minimum: 0
+          nullable: true
+          example: 25000
+        isCompleted:
+          type: boolean
+          default: false
+          example: false
+          description: One-way flag — once true, cannot be set back to false
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-08-14T16:30:00.000Z'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    CreateMilestoneRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Deliver final logo files
+        description:
+          type: string
+          example: SVG, PNG (2x, 3x), and Figma source files.
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-15'
+        amount:
+          type: number
+          minimum: 0
+          example: 25000
+          description: Billable value of this milestone; must not be negative
+
+    UpdateMilestoneRequest:
+      type: object
+      description: All fields optional; cannot update a completed milestone
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        dueDate:
+          type: string
+          format: date
+        amount:
+          type: number
+          minimum: 0
+
+    MilestoneListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Milestone'
+
+    MilestoneResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Milestone'
+
+    # ── Invoice ─────────────────────────────────────────────────────────────
+    LineItem:
+      type: object
+      required: [description, quantity, unitPrice]
+      properties:
+        description:
+          type: string
+          example: Logo design (primary + variations)
+        quantity:
+          type: number
+          minimum: 0.01
+          example: 1
+        unitPrice:
+          type: number
+          minimum: 0
+          example: 25000
+        total:
+          type: number
+          readOnly: true
+          description: Computed by server as quantity × unitPrice
+          example: 25000
+
+    Invoice:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        invoiceNumber:
+          type: string
+          pattern: '^FF-\d{4}-\d{4}$'
+          example: FF-2026-0042
+          description: Auto-generated by server in format FF-YYYY-NNNN
+        freelancerId:
+          $ref: '#/components/schemas/ObjectId'
+        clientId:
+          $ref: '#/components/schemas/ObjectId'
+        projectId:
+          $ref: '#/components/schemas/ObjectId'
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+          minItems: 1
+        subtotal:
+          type: number
+          readOnly: true
+          example: 75000
+        taxRate:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 0
+          example: 18
+        taxAmount:
+          type: number
+          readOnly: true
+          example: 13500
+        totalAmount:
+          type: number
+          readOnly: true
+          example: 88500
+        amountPaid:
+          type: number
+          readOnly: true
+          default: 0
+          example: 44250
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-01'
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-07-01T10:00:00.000Z'
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        notes:
+          type: string
+          nullable: true
+          example: Payment via NEFT to Axis Bank Acct 123456789.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    InvoiceWithDetail:
+      allOf:
+        - $ref: '#/components/schemas/Invoice'
+        - type: object
+          properties:
+            client:
+              $ref: '#/components/schemas/Client'
+            project:
+              $ref: '#/components/schemas/Project'
+            payments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Payment'
+
+    CreateInvoiceRequest:
+      type: object
+      required: [projectId, dueDate]
+      properties:
+        projectId:
+          $ref: '#/components/schemas/ObjectId'
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-01'
+          description: Must be a future date at time of creation
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+          description: Required when autoPopulate is false or omitted
+        taxRate:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 0
+          example: 18
+        notes:
+          type: string
+          example: Payment via NEFT to Axis Bank Acct 123456789.
+        autoPopulate:
+          type: boolean
+          default: false
+          description: >
+            If true, server will auto-generate lineItems from all completed
+            milestones of the linked project. Explicit lineItems are ignored.
+
+    UpdateInvoiceRequest:
+      type: object
+      description: Only allowed when invoice status is `draft`
+      properties:
+        dueDate:
+          type: string
+          format: date
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+          minItems: 1
+        taxRate:
+          type: number
+          minimum: 0
+          maximum: 100
+        notes:
+          type: string
+
+    PatchInvoiceStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+          description: >
+            Manual status override. Note: `overdue` is normally set only by the
+            cron job. Transitions to `paid` are normally triggered by the payment
+            recording system.
+
+    SendInvoiceRequest:
+      type: object
+      properties:
+        customMessage:
+          type: string
+          maxLength: 1000
+          example: Hi, please find your invoice attached. Let me know if you have questions!
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            invoices:
+              type: array
+              items:
+                $ref: '#/components/schemas/Invoice'
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    InvoiceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/InvoiceWithDetail'
+
+    # ── Payment ─────────────────────────────────────────────────────────────
+    Payment:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        invoiceId:
+          $ref: '#/components/schemas/ObjectId'
+        freelancerId:
+          $ref: '#/components/schemas/ObjectId'
+        amount:
+          type: number
+          minimum: 0.01
+          example: 44250
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        date:
+          type: string
+          format: date
+          example: '2026-07-15'
+        notes:
+          type: string
+          nullable: true
+          example: 'UTR: 402612345678'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    CreatePaymentRequest:
+      type: object
+      required: [amount, method, date]
+      properties:
+        amount:
+          type: number
+          minimum: 0.01
+          example: 44250
+          description: Must not exceed (totalAmount − amountPaid) on the invoice
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        date:
+          type: string
+          format: date
+          example: '2026-07-15'
+          description: Must not be a future date
+        notes:
+          type: string
+          example: 'UTR: 402612345678'
+
+    PaymentListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+
+    PaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Payment'
+
+    # ── Dashboard ───────────────────────────────────────────────────────────
+    RecentInvoice:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        invoiceNumber:
+          type: string
+          example: FF-2026-0042
+        clientName:
+          type: string
+          example: TechStart India Pvt. Ltd.
+        totalAmount:
+          type: number
+          example: 88500
+        amountPaid:
+          type: number
+          example: 44250
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-01'
+
+    DashboardStats:
+      type: object
+      properties:
+        totalClients:
+          type: integer
+          description: Count of non-archived clients
+          example: 12
+        activeProjects:
+          type: integer
+          description: Count of projects with status not_started or in_progress
+          example: 4
+        completedProjects:
+          type: integer
+          description: Count of projects with status completed
+          example: 9
+        totalInvoiced:
+          type: number
+          description: Sum of totalAmount across all invoices
+          example: 1250000
+        totalPaid:
+          type: number
+          description: Sum of amountPaid across all invoices
+          example: 980000
+        totalOutstanding:
+          type: number
+          description: totalInvoiced − totalPaid
+          example: 270000
+        overdueInvoicesCount:
+          type: integer
+          description: Count of invoices with status overdue
+          example: 2
+        recentInvoices:
+          type: array
+          description: The 5 most recently created invoices
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/RecentInvoice'
+
+    DashboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/DashboardStats'
+
+  # ── Reusable Parameters ──────────────────────────────────────────────────
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+      description: Page number for pagination
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+      description: Number of results per page
+    SortParam:
+      name: sort
+      in: query
+      schema:
+        type: string
+        default: createdAt
+      description: Field name to sort by
+    OrderParam:
+      name: order
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: Sort direction
+
+  # ── Reusable Responses ───────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: No token provided or token is invalid.
+              field: null
+
+    Forbidden:
+      description: Valid token but resource belongs to a different user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: You do not have permission to access this resource.
+              field: null
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: RESOURCE_NOT_FOUND
+              message: The requested resource does not exist.
+              field: null
+
+    ValidationError:
+      description: Input validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: Email is required and must be a valid email address.
+              field: email
+
+    Conflict:
+      description: Conflict — e.g. duplicate email or existing unpaid invoice
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: DUPLICATE_EMAIL
+              message: A client with this email already exists.
+              field: email
+
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: INTERNAL_SERVER_ERROR
+              message: Something went wrong. Please try again later.
+              field: null
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL SECURITY (overridden on public endpoints)
+# ─────────────────────────────────────────────────────────────────────────────
+security:
+  - BearerAuth: []
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # AUTH
+  # ══════════════════════════════════════════════════════════════════════════
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new freelancer account
+      description: >
+        Creates a new freelancer user. Passwords are hashed with bcrypt (12 rounds)
+        before storage. Returns a JWT valid for 7 days. Rate-limited to 10 requests
+        per IP per 15 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: Arjun Mehta
+              email: arjun@freelanceflow.dev
+              password: Str0ng#Pass!
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                success: true
+                data:
+                  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2Njc2YTFiMmMzZDRlNWY2YTdiOGM5ZDAiLCJlbWFpbCI6ImFyanVuQGZyZWVsYW5jZWZsb3cuZGV2IiwiaWF0IjoxNzUxMTAwODAwLCJleHAiOjE3NTE3MDU2MDB9.SIGNATURE
+                  user:
+                    _id: 6676a1b2c3d4e5f6a7b8c9d0
+                    name: Arjun Mehta
+                    email: arjun@freelanceflow.dev
+                    businessName: null
+                    phone: null
+                    address: null
+                    createdAt: '2026-06-28T09:00:00.000Z'
+                    updatedAt: '2026-06-28T09:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          description: Too many registration attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: RATE_LIMIT_EXCEEDED
+                  message: Too many requests. Please try again in 15 minutes.
+                  field: null
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive a JWT
+      description: >
+        Authenticates the freelancer with email and password. Returns a JWT
+        valid for 7 days. Rate-limited to 10 requests per IP per 15 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: arjun@freelanceflow.dev
+              password: Str0ng#Pass!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                success: true
+                data:
+                  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.PAYLOAD.SIGNATURE
+                  user:
+                    _id: 6676a1b2c3d4e5f6a7b8c9d0
+                    name: Arjun Mehta
+                    email: arjun@freelanceflow.dev
+                    businessName: Mehta Design Studio
+                    phone: '+91 98765 43210'
+                    address: '42 MG Road, Bengaluru, Karnataka 560001'
+                    createdAt: '2026-06-28T09:00:00.000Z'
+                    updatedAt: '2026-06-28T09:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_CREDENTIALS
+                  message: Email or password is incorrect.
+                  field: null
+        '429':
+          description: Too many login attempts
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the authenticated freelancer's profile
+      description: Returns the full profile of the currently authenticated freelancer.
+      responses:
+        '200':
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Auth]
+      summary: Update the authenticated freelancer's profile
+      description: >
+        Updates one or more profile fields. Only include fields you want to change.
+        Note: email and password cannot be changed via this endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+            example:
+              name: Arjun K. Mehta
+              businessName: Mehta Design Studio
+              phone: '+91 98765 43210'
+              address: '42 MG Road, Bengaluru, Karnataka 560001'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # CLIENTS
+  # ══════════════════════════════════════════════════════════════════════════
+  /clients:
+    get:
+      tags: [Clients]
+      summary: List all clients
+      description: >
+        Returns a paginated list of clients belonging to the authenticated freelancer.
+        By default, archived clients are excluded. Use `isArchived=true` to include them.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+        - name: isArchived
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Filter by archived status
+      responses:
+        '200':
+          description: Clients retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientListResponse'
+              example:
+                success: true
+                data:
+                  clients:
+                    - _id: 6676a1b2c3d4e5f6a7b8c9d1
+                      freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                      name: TechStart India Pvt. Ltd.
+                      email: accounts@techstart.in
+                      phone: '+91 22 6789 0000'
+                      company: TechStart India Pvt. Ltd.
+                      address: 'Level 5, Cyber City, Gurugram, Haryana 122002'
+                      notes: null
+                      isArchived: false
+                      createdAt: '2026-06-28T09:00:00.000Z'
+                      updatedAt: '2026-06-28T09:00:00.000Z'
+                  pagination:
+                    page: 1
+                    limit: 10
+                    total: 1
+                    totalPages: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Clients]
+      summary: Create a new client
+      description: >
+        Creates a client record. The `email` must be unique within the authenticated
+        freelancer's account (two freelancers may share the same client email across
+        the system, but not within one account).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+            example:
+              name: TechStart India Pvt. Ltd.
+              email: accounts@techstart.in
+              phone: '+91 22 6789 0000'
+              company: TechStart India Pvt. Ltd.
+              address: 'Level 5, Cyber City, Gurugram, Haryana 122002'
+              notes: Prefers PDF invoices emailed by the 1st of the month.
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /clients/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Client ObjectId
+
+    get:
+      tags: [Clients]
+      summary: Get a single client
+      description: Returns the client record along with a summary of linked projects.
+      responses:
+        '200':
+          description: Client found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+              example:
+                success: true
+                data:
+                  _id: 6676a1b2c3d4e5f6a7b8c9d1
+                  freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                  name: TechStart India Pvt. Ltd.
+                  email: accounts@techstart.in
+                  phone: '+91 22 6789 0000'
+                  company: TechStart India Pvt. Ltd.
+                  address: 'Level 5, Cyber City, Gurugram, Haryana 122002'
+                  notes: Prefers PDF invoices emailed by the 1st of the month.
+                  isArchived: false
+                  projectCount: 3
+                  createdAt: '2026-06-28T09:00:00.000Z'
+                  updatedAt: '2026-06-28T09:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    put:
+      tags: [Clients]
+      summary: Update a client
+      description: Partially updates client fields. All body fields are optional.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+            example:
+              phone: '+91 22 9999 0000'
+              notes: New billing contact is Priya Sharma.
+      responses:
+        '200':
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Clients]
+      summary: Archive (soft-delete) a client
+      description: >
+        Sets `isArchived: true` on the client. Hard deletion is not supported.
+        Returns 400 if the client has any non-completed, non-archived projects.
+      responses:
+        '200':
+          description: Client archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Client archived successfully.
+        '400':
+          description: Cannot archive — active projects exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: CLIENT_HAS_ACTIVE_PROJECTS
+                  message: Cannot archive a client with active (non-completed) projects.
+                  field: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # PROJECTS
+  # ══════════════════════════════════════════════════════════════════════════
+  /projects:
+    get:
+      tags: [Projects]
+      summary: List all projects
+      description: >
+        Returns a paginated list of projects. Supports filtering by `status` and `clientId`.
+        Archived projects are excluded by default.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ProjectStatus'
+          description: Filter by project status
+        - name: clientId
+          in: query
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: Filter by client
+        - name: isArchived
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include archived projects
+      responses:
+        '200':
+          description: Projects retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Projects]
+      summary: Create a new project
+      description: >
+        Creates a project linked to an existing client. The `clientId` must reference
+        an active (non-archived) client owned by the authenticated freelancer.
+        `deadline` must be after `startDate` if both are provided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            example:
+              title: Brand Identity Redesign
+              clientId: 6676a1b2c3d4e5f6a7b8c9d1
+              description: Full rebrand including logo, colour palette, and typography guide.
+              startDate: '2026-07-01'
+              deadline: '2026-09-30'
+              totalBudget: 150000
+              currency: INR
+              status: not_started
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Referenced client not found or archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: CLIENT_NOT_FOUND
+                  message: Client does not exist or has been archived.
+                  field: clientId
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Project ObjectId
+
+    get:
+      tags: [Projects]
+      summary: Get a single project
+      description: >
+        Returns the project with populated client details, full milestone list,
+        and invoice count.
+      responses:
+        '200':
+          description: Project found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    put:
+      tags: [Projects]
+      summary: Update a project
+      description: >
+        Updates project fields. Status transitions are enforced:
+        - `completed` is terminal — no further status changes are allowed.
+        - Any status may transition to `on_hold`.
+        - Edits to a `completed` project are rejected with 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+            example:
+              status: in_progress
+              deadline: '2026-10-15'
+      responses:
+        '200':
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Validation error or invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_STATUS_TRANSITION
+                  message: A completed project cannot be edited or have its status changed.
+                  field: status
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Projects]
+      summary: Archive (soft-delete) a project
+      description: "Sets `isArchived: true`. Does not delete milestones or invoices."
+      responses:
+        '200':
+          description: Project archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Project archived successfully.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # MILESTONES
+  # ══════════════════════════════════════════════════════════════════════════
+  /projects/{projectId}/milestones:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Parent project ObjectId
+
+    get:
+      tags: [Milestones]
+      summary: List milestones for a project
+      description: Returns all milestones belonging to the specified project, ordered by `createdAt` ascending.
+      responses:
+        '200':
+          description: Milestones retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneListResponse'
+              example:
+                success: true
+                data:
+                  - _id: 6676a1b2c3d4e5f6a7b8c9d3
+                    projectId: 6676a1b2c3d4e5f6a7b8c9d2
+                    freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                    title: Deliver final logo files
+                    description: SVG, PNG (2x, 3x), and Figma source files.
+                    dueDate: '2026-08-15'
+                    amount: 25000
+                    isCompleted: true
+                    completedAt: '2026-08-14T16:30:00.000Z'
+                    createdAt: '2026-07-01T09:00:00.000Z'
+                    updatedAt: '2026-08-14T16:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Milestones]
+      summary: Create a milestone
+      description: >
+        Creates a milestone under the specified project. The project must exist,
+        belong to the authenticated freelancer, and must not have status `completed`.
+        Amounts must not be negative.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMilestoneRequest'
+            example:
+              title: Deliver final logo files
+              description: SVG, PNG (2x, 3x), and Figma source files.
+              dueDate: '2026-08-15'
+              amount: 25000
+      responses:
+        '201':
+          description: Milestone created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /milestones/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Milestone ObjectId
+
+    get:
+      tags: [Milestones]
+      summary: Get a single milestone
+      responses:
+        '200':
+          description: Milestone found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    put:
+      tags: [Milestones]
+      summary: Update a milestone
+      description: >
+        Updates milestone fields. Cannot update a milestone that has already been
+        completed (`isCompleted: true`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMilestoneRequest'
+            example:
+              dueDate: '2026-08-20'
+              amount: 27500
+      responses:
+        '200':
+          description: Milestone updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneResponse'
+        '400':
+          description: Validation error or milestone already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: MILESTONE_ALREADY_COMPLETE
+                  message: A completed milestone cannot be edited.
+                  field: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Milestones]
+      summary: Delete a milestone
+      description: >
+        Permanently deletes a milestone. Cannot delete a milestone that has been
+        completed — returns 400.
+      responses:
+        '200':
+          description: Milestone deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Milestone deleted successfully.
+        '400':
+          description: Cannot delete a completed milestone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: CANNOT_DELETE_COMPLETED_MILESTONE
+                  message: Completed milestones cannot be deleted.
+                  field: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /milestones/{id}/complete:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Milestone ObjectId
+
+    patch:
+      tags: [Milestones]
+      summary: Mark a milestone as completed
+      description: >
+        Sets `isCompleted: true` and records `completedAt` with the current server
+        timestamp. This is a **one-way operation** — once completed, a milestone
+        cannot be reverted to incomplete. Subsequent calls to this endpoint on an
+        already-completed milestone return 400.
+      responses:
+        '200':
+          description: Milestone marked complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneResponse'
+              example:
+                success: true
+                data:
+                  _id: 6676a1b2c3d4e5f6a7b8c9d3
+                  projectId: 6676a1b2c3d4e5f6a7b8c9d2
+                  freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                  title: Deliver final logo files
+                  description: SVG, PNG (2x, 3x), and Figma source files.
+                  dueDate: '2026-08-15'
+                  amount: 25000
+                  isCompleted: true
+                  completedAt: '2026-08-14T16:30:00.000Z'
+                  createdAt: '2026-07-01T09:00:00.000Z'
+                  updatedAt: '2026-08-14T16:30:00.000Z'
+        '400':
+          description: Milestone already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: MILESTONE_ALREADY_COMPLETE
+                  message: This milestone has already been marked as completed.
+                  field: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # INVOICES
+  # ══════════════════════════════════════════════════════════════════════════
+  /invoices:
+    get:
+      tags: [Invoices]
+      summary: List all invoices
+      description: >
+        Returns a paginated list of invoices. Supports filtering by `status` and `clientId`.
+        Client and project names are populated in the response.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+          description: Filter by invoice status
+        - name: clientId
+          in: query
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: Filter by client
+      responses:
+        '200':
+          description: Invoices retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Invoices]
+      summary: Create a new invoice
+      description: >
+        Creates an invoice for a project. The invoice number is auto-generated
+        in the format `FF-YYYY-NNNN` using an atomic counter per freelancer per year.
+
+        **Auto-populate mode:** Set `autoPopulate: true` to automatically build
+        `lineItems` from all completed milestones of the linked project.
+        Explicit `lineItems` in the request body are ignored in this mode.
+
+        **Duplicate guard:** Returns 409 if the project already has an open invoice
+        (status in `draft`, `sent`, `partially_paid`, or `overdue`).
+
+        Computed fields (`subtotal`, `taxAmount`, `totalAmount`) are calculated
+        server-side and cannot be submitted in the request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+            examples:
+              manual:
+                summary: Manual line items
+                value:
+                  projectId: 6676a1b2c3d4e5f6a7b8c9d2
+                  dueDate: '2026-08-01'
+                  lineItems:
+                    - description: Logo design (primary + variations)
+                      quantity: 1
+                      unitPrice: 25000
+                    - description: Brand guidelines document
+                      quantity: 1
+                      unitPrice: 15000
+                    - description: Social media asset pack
+                      quantity: 1
+                      unitPrice: 10000
+                  taxRate: 18
+                  notes: Payment via NEFT to Axis Bank Acct 123456789.
+              autoPopulate:
+                summary: Auto-populate from completed milestones
+                value:
+                  projectId: 6676a1b2c3d4e5f6a7b8c9d2
+                  dueDate: '2026-08-01'
+                  autoPopulate: true
+                  taxRate: 18
+                  notes: Payment via NEFT to Axis Bank Acct 123456789.
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+              example:
+                success: true
+                data:
+                  _id: 6676a1b2c3d4e5f6a7b8c9d4
+                  invoiceNumber: FF-2026-0042
+                  freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                  clientId: 6676a1b2c3d4e5f6a7b8c9d1
+                  projectId: 6676a1b2c3d4e5f6a7b8c9d2
+                  lineItems:
+                    - description: Logo design (primary + variations)
+                      quantity: 1
+                      unitPrice: 25000
+                      total: 25000
+                    - description: Brand guidelines document
+                      quantity: 1
+                      unitPrice: 15000
+                      total: 15000
+                  subtotal: 50000
+                  taxRate: 18
+                  taxAmount: 9000
+                  totalAmount: 59000
+                  amountPaid: 0
+                  status: draft
+                  dueDate: '2026-08-01'
+                  sentAt: null
+                  paidAt: null
+                  notes: Payment via NEFT to Axis Bank Acct 123456789.
+                  createdAt: '2026-06-28T09:00:00.000Z'
+                  updatedAt: '2026-06-28T09:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Project already has an open (unpaid) invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: OPEN_INVOICE_EXISTS
+                  message: This project already has an unpaid invoice. Settle it before creating a new one.
+                  field: projectId
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /invoices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Invoice ObjectId
+
+    get:
+      tags: [Invoices]
+      summary: Get a single invoice
+      description: >
+        Returns the full invoice with populated client and project details,
+        line items, and payment history.
+      responses:
+        '200':
+          description: Invoice found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    put:
+      tags: [Invoices]
+      summary: Update an invoice
+      description: >
+        Updates invoice fields. Only allowed when `status === 'draft'`. Attempting
+        to update a sent, paid, or overdue invoice returns 400. Totals are
+        recomputed server-side after any line item change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInvoiceRequest'
+            example:
+              dueDate: '2026-08-15'
+              taxRate: 0
+              notes: Updated bank details — please use HDFC Acct 987654321.
+      responses:
+        '200':
+          description: Invoice updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          description: Validation error or invoice is not in draft status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVOICE_NOT_EDITABLE
+                  message: Only draft invoices can be edited.
+                  field: status
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /invoices/{id}/pdf:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Invoice ObjectId
+
+    get:
+      tags: [Invoices]
+      summary: Download invoice as PDF
+      description: >
+        Generates a PDF of the invoice on demand (not stored to disk) and streams
+        it to the browser as a file download. The PDF includes freelancer contact
+        details, client billing address, all line items, subtotal, tax breakdown,
+        total due, and any notes.
+      responses:
+        '200':
+          description: PDF binary stream
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename=FF-2026-0042.pdf
+            Content-Type:
+              schema:
+                type: string
+                example: application/pdf
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /invoices/{id}/send:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Invoice ObjectId
+
+    post:
+      tags: [Invoices]
+      summary: Email invoice PDF to client
+      description: >
+        Generates a fresh PDF and emails it to the client's email address with
+        a professional HTML body. On success, updates `invoice.status` to `"sent"`
+        and records `sentAt`. Re-sending is allowed (idempotent on `sent` status).
+        Blocked only if `status === 'paid'`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendInvoiceRequest'
+            example:
+              customMessage: Hi, please find your invoice attached. Do let me know if you have any questions!
+      responses:
+        '200':
+          description: Invoice emailed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Invoice FF-2026-0042 sent to accounts@techstart.in
+                      sentAt:
+                        $ref: '#/components/schemas/Timestamp'
+        '400':
+          description: Cannot email a paid invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVOICE_ALREADY_PAID
+                  message: A paid invoice cannot be re-sent.
+                  field: status
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /invoices/{id}/status:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Invoice ObjectId
+
+    patch:
+      tags: [Invoices]
+      summary: Manually update invoice status
+      description: >
+        Allows the freelancer to manually override the invoice status. Use with care:
+        - `overdue` is normally set by the cron job only.
+        - `paid` is normally triggered by recording a full payment.
+        - Invalid transitions (e.g. moving a `paid` invoice back to `draft`) are rejected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchInvoiceStatusRequest'
+            example:
+              status: sent
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # PAYMENTS
+  # ══════════════════════════════════════════════════════════════════════════
+  /invoices/{invoiceId}/payments:
+    parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Invoice ObjectId
+
+    get:
+      tags: [Payments]
+      summary: List payments for an invoice
+      description: Returns all payment records for the specified invoice, ordered by `date` descending.
+      responses:
+        '200':
+          description: Payments retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentListResponse'
+              example:
+                success: true
+                data:
+                  - _id: 6676a1b2c3d4e5f6a7b8c9d5
+                    invoiceId: 6676a1b2c3d4e5f6a7b8c9d4
+                    freelancerId: 6676a1b2c3d4e5f6a7b8c9d0
+                    amount: 29500
+                    method: upi
+                    date: '2026-07-15'
+                    notes: 'UTR: 402612345678'
+                    createdAt: '2026-07-15T11:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Payments]
+      summary: Record a payment against an invoice
+      description: >
+        Records a payment (full or partial) against the invoice. After recording:
+
+        - `invoice.amountPaid` is incremented by the payment amount.
+        - If `amountPaid >= totalAmount`, invoice status auto-transitions to `paid`
+          and `paidAt` is recorded.
+        - If `amountPaid < totalAmount`, invoice status auto-transitions to
+          `partially_paid`.
+
+        **Guards:**
+        - Cannot record a payment on a `paid` invoice.
+        - Payment amount must not exceed `totalAmount − amountPaid` (no overpayment).
+        - Payment `date` must not be in the future.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+            examples:
+              partial:
+                summary: Partial payment via UPI
+                value:
+                  amount: 29500
+                  method: upi
+                  date: '2026-07-15'
+                  notes: 'UTR: 402612345678'
+              full:
+                summary: Remaining balance via bank transfer
+                value:
+                  amount: 29500
+                  method: bank_transfer
+                  date: '2026-08-01'
+                  notes: NEFT ref XYZ-99887
+      responses:
+        '201':
+          description: Payment recorded and invoice status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      payment:
+                        $ref: '#/components/schemas/Payment'
+                      invoice:
+                        type: object
+                        description: Updated invoice summary
+                        properties:
+                          _id:
+                            $ref: '#/components/schemas/ObjectId'
+                          invoiceNumber:
+                            type: string
+                            example: FF-2026-0042
+                          amountPaid:
+                            type: number
+                            example: 59000
+                          totalAmount:
+                            type: number
+                            example: 59000
+                          status:
+                            $ref: '#/components/schemas/InvoiceStatus'
+                          paidAt:
+                            $ref: '#/components/schemas/Timestamp'
+        '400':
+          description: Validation error, overpayment attempt, or invoice already paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                alreadyPaid:
+                  summary: Invoice already settled
+                  value:
+                    success: false
+                    error:
+                      code: INVOICE_ALREADY_PAID
+                      message: This invoice has already been fully paid.
+                      field: null
+                overpayment:
+                  summary: Amount exceeds outstanding balance
+                  value:
+                    success: false
+                    error:
+                      code: OVERPAYMENT_NOT_ALLOWED
+                      message: Payment amount exceeds the outstanding balance of ₹29500.
+                      field: amount
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /payments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ObjectId'
+        description: Payment ObjectId
+
+    get:
+      tags: [Payments]
+      summary: Get a single payment record
+      responses:
+        '200':
+          description: Payment found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Payments]
+      summary: Delete an incorrect payment record
+      description: >
+        Permanently deletes the payment record and reverses its effect on the invoice:
+
+        - `invoice.amountPaid` is decremented by the deleted payment's amount.
+        - Invoice status is recalculated: if `amountPaid === 0`, reverts to `sent`;
+          otherwise reverts to `partially_paid`.
+      responses:
+        '200':
+          description: Payment deleted and invoice totals reversed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Payment deleted and invoice updated.
+                      invoice:
+                        type: object
+                        properties:
+                          _id:
+                            $ref: '#/components/schemas/ObjectId'
+                          amountPaid:
+                            type: number
+                            example: 0
+                          status:
+                            $ref: '#/components/schemas/InvoiceStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # DASHBOARD
+  # ══════════════════════════════════════════════════════════════════════════
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Get aggregated business summary
+      description: >
+        Returns a comprehensive snapshot of the freelancer's business metrics,
+        computed via MongoDB aggregation pipelines. The response is cached
+        in-memory for 60 seconds to avoid repeated heavy queries on the free-tier
+        Atlas cluster.
+
+        All values are scoped to the authenticated freelancer's data only.
+      responses:
+        '200':
+          description: Dashboard stats retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+              example:
+                success: true
+                data:
+                  totalClients: 12
+                  activeProjects: 4
+                  completedProjects: 9
+                  totalInvoiced: 1250000
+                  totalPaid: 980000
+                  totalOutstanding: 270000
+                  overdueInvoicesCount: 2
+                  recentInvoices:
+                    - _id: 6676a1b2c3d4e5f6a7b8c9d4
+                      invoiceNumber: FF-2026-0042
+                      clientName: TechStart India Pvt. Ltd.
+                      totalAmount: 59000
+                      amountPaid: 29500
+                      status: partially_paid
+                      dueDate: '2026-08-01'
+                    - _id: 6676a1b2c3d4e5f6a7b8c9d6
+                      invoiceNumber: FF-2026-0041
+                      clientName: Crux Media Pvt. Ltd.
+                      totalAmount: 120000
+                      amountPaid: 120000
+                      status: paid
+                      dueDate: '2026-07-01'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # DEV (disabled in production)
+  # ══════════════════════════════════════════════════════════════════════════
+  /dev/trigger-overdue:
+    post:
+      tags: [Dev]
+      summary: Manually trigger the overdue cron job
+      description: >
+        **Development only.** This endpoint is disabled in production (returns 404
+        when `NODE_ENV === 'production'`). Manually runs the overdue detection job:
+        finds all invoices with `dueDate < now` and `status in [sent, partially_paid]`,
+        marks them `overdue`, and dispatches reminder emails.
+
+        Useful for demonstrating cron behaviour without waiting for midnight.
+      responses:
+        '200':
+          description: Cron job executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Overdue job completed.
+                      invoicesMarkedOverdue:
+                        type: integer
+                        example: 3
+                      emailsSent:
+                        type: integer
+                        example: 3
+                      emailsFailed:
+                        type: integer
+                        example: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Endpoint disabled in production
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: NOT_FOUND
+                  message: Not found.
+                  field: null
+        '500':
+          $ref: '#/components/responses/ServerError'

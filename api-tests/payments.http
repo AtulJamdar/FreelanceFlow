@@ -1,0 +1,89 @@
+# FreelanceFlow Payment & Automation API Manual Test Suite
+
+@baseUrl = http://localhost:5000/api/v1
+@contentType = application/json
+
+### 1. Login (To get token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "jane.doe@example.com",
+  "password": "password123"
+}
+
+###
+
+@authToken = {{login.response.body.data.token}}
+
+@invoiceId = 64f1a2b3c4d5e6f7a8b9c0d4
+
+### 2. Record Partial Payment (T-044)
+# @name recordPayment1
+POST {{baseUrl}}/invoices/{{invoiceId}}/payments
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "amount": 20000,
+  "method": "bank_transfer",
+  "paymentDate": "2026-06-28T12:00:00Z",
+  "referenceNumber": "TXN_998811"
+}
+
+###
+
+@paymentId = {{recordPayment1.response.body.data._id}}
+
+### 3. Record remaining payment to fully settle the invoice (T-044 auto status paid)
+POST {{baseUrl}}/invoices/{{invoiceId}}/payments
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "amount": 13000,
+  "method": "upi",
+  "paymentDate": "2026-06-28T12:00:00Z",
+  "referenceNumber": "TXN_998812"
+}
+
+###
+
+### 4. Attempt to pay on already paid invoice (T-043 blocks)
+POST {{baseUrl}}/invoices/{{invoiceId}}/payments
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "amount": 1000,
+  "method": "cash",
+  "paymentDate": "2026-06-28T12:00:00Z"
+}
+
+###
+
+### 5. Get payments list for an invoice (T-044)
+GET {{baseUrl}}/invoices/{{invoiceId}}/payments
+Authorization: Bearer {{authToken}}
+
+###
+
+### 6. Get payment details by ID (T-044)
+GET {{baseUrl}}/payments/{{paymentId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 7. Delete payment to test status reversal (T-044 reverses amountPaid)
+DELETE {{baseUrl}}/payments/{{paymentId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 8. Dev Trigger Overdue Scan (T-049 dev utility only)
+POST {{baseUrl}}/dev/trigger-overdue
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+###

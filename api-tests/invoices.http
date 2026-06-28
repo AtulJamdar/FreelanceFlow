@@ -1,0 +1,120 @@
+# FreelanceFlow Invoice API Manual Test Suite
+
+@baseUrl = http://localhost:5000/api/v1
+@contentType = application/json
+
+### 1. Login (To get token)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "jane.doe@example.com",
+  "password": "password123"
+}
+
+###
+
+@authToken = {{login.response.body.data.token}}
+
+@projectId = 64f1a2b3c4d5e6f7a8b9c0d3
+
+### 2. Create Invoice with manual line items (T-039)
+# @name createInvoice
+POST {{baseUrl}}/invoices
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "projectId": "{{projectId}}",
+  "dueDate": "2026-08-30",
+  "taxRate": 18,
+  "lineItems": [
+    { "description": "Consulting and Architecture", "quantity": 1, "unitPrice": 40000 },
+    { "description": "Frontend Engineering", "quantity": 2, "unitPrice": 20000 }
+  ]
+}
+
+###
+
+@invoiceId = {{createInvoice.response.body.data._id}}
+
+### 3. Attempt to create another unpaid invoice for the same project (T-033 guard)
+POST {{baseUrl}}/invoices
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "projectId": "{{projectId}}",
+  "dueDate": "2026-08-30",
+  "lineItems": [
+    { "description": "Duplicate Check", "unitPrice": 1000 }
+  ]
+}
+
+###
+
+### 4. Create Invoice with autoPopulate: true (T-033 milestones mapper)
+POST {{baseUrl}}/invoices
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "projectId": "{{projectId}}",
+  "dueDate": "2026-08-30",
+  "taxRate": 5,
+  "autoPopulate": true
+}
+
+###
+
+### 5. Get paginated invoices list (T-034)
+GET {{baseUrl}}/invoices?page=1&limit=10&status=draft
+Authorization: Bearer {{authToken}}
+
+###
+
+### 6. Get single invoice details with nested payments (T-034)
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### 7. Update draft invoice line items & notes (T-034 recalculates)
+PUT {{baseUrl}}/invoices/{{invoiceId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "notes": "Thank you for choosing JD Designs",
+  "taxRate": 10,
+  "lineItems": [
+    { "description": "Consulting and Architecture - Updated", "quantity": 1, "unitPrice": 45000 },
+    { "description": "Frontend Engineering", "quantity": 2, "unitPrice": 20000 }
+  ]
+}
+
+###
+
+### 8. Send invoice via Email (T-038 status update -> sent)
+POST {{baseUrl}}/invoices/{{invoiceId}}/send
+Authorization: Bearer {{authToken}}
+
+###
+
+### 9. Attempt to modify details of a sent invoice (T-034 draft lock checks)
+PUT {{baseUrl}}/invoices/{{invoiceId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "notes": "Trying to modify sent invoice notes"
+}
+
+###
+
+### 10. Download Invoice PDF (T-036 PDF endpoint)
+GET {{baseUrl}}/invoices/{{invoiceId}}/pdf
+Authorization: Bearer {{authToken}}
+
+###
