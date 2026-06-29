@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
-import Navbar from '../components/Navbar';
+import DashboardLayout from '../components/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { AlertCircle, UserPlus, Phone, Briefcase, Plus } from 'lucide-react';
 
 const ClientsPage = () => {
   const [clients, setClients] = useState([]);
@@ -52,7 +64,6 @@ const ClientsPage = () => {
       });
 
       if (response.data && response.data.success) {
-        // Reset form
         setName('');
         setEmail('');
         setCompany('');
@@ -60,7 +71,7 @@ const ClientsPage = () => {
         setAddress('');
         setNotes('');
         setShowModal(false);
-        fetchClients(); // refresh list
+        fetchClients();
       }
     } catch (err) {
       console.error(err);
@@ -77,7 +88,7 @@ const ClientsPage = () => {
     try {
       const response = await api.delete(`/clients/${id}`);
       if (response.data && response.data.success) {
-        fetchClients(); // refresh list
+        fetchClients();
       }
     } catch (err) {
       console.error(err);
@@ -87,227 +98,217 @@ const ClientsPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="relative w-16 h-16">
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-indigo-500/20 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="relative w-16 h-16 animate-pulse">
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-primary/20 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-t-primary rounded-full animate-spin"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <Navbar />
-
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-900 pb-6">
+    <DashboardLayout title="Clients">
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">Clients</h1>
-            <p className="text-sm text-slate-500 mt-1">Manage and track your client contacts and directory</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Clients</h1>
+            <p className="text-sm text-muted-foreground mt-1">Manage and track your client directory profiles</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md transition-all duration-200 self-start sm:self-center flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Client
-          </button>
+
+          <Dialog open={showModal} onOpenChange={setShowModal}>
+            <DialogTrigger asChild>
+              <Button className="font-semibold flex items-center gap-2 rounded-xl">
+                <Plus className="w-4 h-4" />
+                Add Client
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg bg-card text-card-foreground border border-border rounded-2xl shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-primary" />
+                  New Client Profile
+                </DialogTitle>
+              </DialogHeader>
+
+              {formError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateClient} className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="clientName" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Client Name
+                    </Label>
+                    <Input
+                      id="clientName"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="John Smith"
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="clientEmail" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Email Address
+                    </Label>
+                    <Input
+                      id="clientEmail"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="john@example.com"
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="clientCompany" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Company
+                    </Label>
+                    <Input
+                      id="clientCompany"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Company Inc."
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="clientPhone" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Phone Number
+                    </Label>
+                    <Input
+                      id="clientPhone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91-9988..."
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="clientAddress" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Address
+                  </Label>
+                  <Input
+                    id="clientAddress"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Physical billing address"
+                    className="rounded-xl border border-border bg-background text-foreground"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="clientNotes" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Notes
+                  </Label>
+                  <textarea
+                    id="clientNotes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows="3"
+                    className="w-full px-3 py-2 bg-background border border-border focus:border-primary/80 rounded-xl text-foreground text-sm outline-none transition-colors resize-none"
+                    placeholder="Billing preferences or notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                    className="rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    className="rounded-xl"
+                  >
+                    {formLoading ? 'Saving...' : 'Save Profile'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 text-sm text-red-400">
-            <svg className="w-5 h-5 flex-shrink-0 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-2xl flex gap-3 text-sm text-destructive">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {/* Clients Table Card */}
-        <div className="p-6 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-xl">
-          <div className="overflow-x-auto rounded-xl border border-slate-800/50">
-            <table className="min-w-full divide-y divide-slate-800 bg-slate-950/20">
-              <thead>
-                <tr className="bg-slate-900/30">
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client Name</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Company</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Phone</th>
-                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-900/50">
+        <div className="p-6 bg-card text-card-foreground border border-border rounded-2xl shadow-sm">
+          <div className="overflow-x-auto rounded-xl border border-border bg-background/50">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Client Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Company</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Phone</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {clients.length > 0 ? (
                   clients.map((cli) => (
-                    <tr key={cli._id} className="hover:bg-slate-900/10 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-white">
+                    <TableRow key={cli._id} className="hover:bg-muted/30">
+                      <TableCell className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-foreground">
                         {cli.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      </TableCell>
+                      <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                         {cli.company || '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                      </TableCell>
+                      <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                         {cli.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                      </TableCell>
+                      <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                         {cli.phone || '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <button
+                      </TableCell>
+                      <TableCell className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleArchiveClient(cli._id)}
-                          className="px-3 py-1.5 border border-slate-800 hover:border-red-500/30 text-slate-400 hover:text-red-400 hover:bg-red-500/5 rounded-lg transition-all duration-200"
+                          className="hover:border-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg border-border"
                         >
                           Archive
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-sm text-slate-500">
+                  <TableRow>
+                    <TableCell colSpan="5" className="h-32 text-center text-sm text-muted-foreground">
                       No clients found. Add a client to start recording projects.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
-
-        {/* Create Client Modal */}
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-            <div className="w-full max-w-lg p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl relative">
-              <button
-                onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-
-              <h2 className="text-2xl font-bold text-white mb-6">New Client Profile</h2>
-
-              {formError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-                  {formError}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateClient} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Client Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                      placeholder="John Smith"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                      placeholder="john@example.com"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Company
-                    </label>
-                    <input
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                      placeholder="Company Inc."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                      placeholder="+91-9988..."
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                    placeholder="Physical billing address"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows="3"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors resize-none"
-                    placeholder="Custom billing preferences or project details"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={formLoading}
-                    className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all duration-200"
-                  >
-                    {formLoading ? 'Creating...' : 'Save Profile'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

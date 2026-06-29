@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/axios';
-import Navbar from '../components/Navbar';
-import Badge from '../components/Badge';
+import DashboardLayout from '../components/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, Clock, Plus, HelpCircle } from 'lucide-react';
 
 const ProjectDetailPage = () => {
   const { id } = useParams();
@@ -65,13 +70,11 @@ const ProjectDetailPage = () => {
       });
 
       if (response.data && response.data.success) {
-        // Reset form
         setTitle('');
         setDescription('');
         setAmount('');
         setDueDate('');
         setShowForm(false);
-        // Refresh details & milestones list
         await Promise.all([fetchProjectDetails(), fetchMilestones()]);
       }
     } catch (err) {
@@ -110,7 +113,6 @@ const ProjectDetailPage = () => {
     });
   };
 
-  // Calculate project financial metrics
   const completedMilestonesAmount = milestones
     .filter(m => m.isCompleted)
     .reduce((sum, m) => sum + (m.amount || 0), 0);
@@ -118,19 +120,27 @@ const ProjectDetailPage = () => {
   const totalMilestonesAmount = milestones
     .reduce((sum, m) => sum + (m.amount || 0), 0);
 
-  // Compute progress bar width
   const progressPercent = milestones.length > 0 
     ? Math.round((milestones.filter(m => m.isCompleted).length / milestones.length) * 100)
     : 0;
 
+  const getProjectBadgeVariant = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'default';
+      case 'in_progress':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="relative w-16 h-16">
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-indigo-500/20 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="relative w-16 h-16 animate-pulse">
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-primary/20 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-t-primary rounded-full animate-spin"></div>
         </div>
       </div>
     );
@@ -138,180 +148,200 @@ const ProjectDetailPage = () => {
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md p-6 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
-            <h2 className="text-xl font-bold text-red-400 mb-2">Error Loading Project</h2>
-            <p className="text-sm text-slate-400 mb-4">{error || 'Project not found'}</p>
-            <Link to="/projects" className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold">
-              Return to Projects List
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6">
+        <Card className="max-w-md p-6 border border-destructive/20 rounded-2xl text-center bg-destructive/5 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-destructive flex items-center justify-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Error Loading Project
+            </CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">{error || 'Project not found'}</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <Link to="/projects">
+              <Button variant="outline" className="rounded-xl">Return to Projects List</Button>
             </Link>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <Navbar />
-
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+    <DashboardLayout title="Project Details">
+      <div className="space-y-8">
         {/* Navigation Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Link to="/projects" className="hover:text-indigo-400 transition-colors">Projects</Link>
-          <span>/</span>
-          <span className="text-slate-300 font-semibold truncate max-w-[200px]">{project.title}</span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground border-b border-border/40 pb-2">
+          <Link to="/projects" className="hover:text-primary transition-colors">Projects</Link>
+          <ChevronRight className="w-3.5 h-3.5" />
+          <span className="text-foreground font-semibold truncate max-w-[200px]">{project.title}</span>
         </div>
 
         {/* Project Header Info */}
-        <div className="p-6 sm:p-8 bg-slate-900/40 border border-slate-800/80 rounded-2xl shadow-xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <Badge status={project.status} />
-                <span className="text-xs text-slate-500 font-mono">Client: {project.clientId?.company || project.clientId?.name}</span>
+        <Card className="shadow-sm">
+          <CardContent className="p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <Badge variant={getProjectBadgeVariant(project.status)}>
+                    {project.status.replace('_', ' ').toUpperCase()}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    Client: {project.clientId?.company || project.clientId?.name}
+                  </span>
+                </div>
+                <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{project.title}</h1>
+                <p className="text-sm text-muted-foreground mt-2 max-w-3xl">
+                  {project.description || 'No description provided.'}
+                </p>
               </div>
-              <h1 className="text-3xl font-extrabold text-white">{project.title}</h1>
-              <p className="text-sm text-slate-400 mt-2 max-w-3xl">{project.description || 'No description provided.'}</p>
+              <div className="bg-secondary/40 border border-border rounded-2xl p-4 self-start min-w-[200px] text-right">
+                <span className="block text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Total Budget</span>
+                <span className="block text-2xl font-extrabold text-foreground mt-0.5">{project.totalBudget ? formatCurrency(project.totalBudget) : 'TBD'}</span>
+              </div>
             </div>
-            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 self-start min-w-[200px] text-right space-y-1">
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Total Project Budget</span>
-              <span className="block text-2xl font-extrabold text-white">{project.totalBudget ? formatCurrency(project.totalBudget) : 'TBD'}</span>
-            </div>
-          </div>
 
-          {/* Dates & Metrics details */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 border-t border-b border-slate-800/50 py-6 text-sm text-slate-400">
-            <div>
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">Timeline</span>
-              <span className="font-semibold text-slate-200">{formatDate(project.startDate)} — {formatDate(project.deadline)}</span>
+            {/* Dates & Metrics details */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 border-t border-b border-border/50 py-6 text-sm text-muted-foreground">
+              <div>
+                <span className="block text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold mb-1">Timeline</span>
+                <span className="font-semibold text-foreground">{formatDate(project.startDate)} — {formatDate(project.deadline)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold mb-1">Milestones Completed</span>
+                <span className="font-semibold text-foreground">
+                  {milestones.filter(m => m.isCompleted).length} / {milestones.length}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold mb-1">Invoiced Progress</span>
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(completedMilestonesAmount)} / {formatCurrency(totalMilestonesAmount)}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">Milestones Completed</span>
-              <span className="font-semibold text-slate-200">
-                {milestones.filter(m => m.isCompleted).length} / {milestones.length}
-              </span>
-            </div>
-            <div>
-              <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">Invoiced Progress</span>
-              <span className="font-semibold text-slate-200">
-                {formatCurrency(completedMilestonesAmount)} / {formatCurrency(totalMilestonesAmount)}
-              </span>
-            </div>
-          </div>
 
-          {/* Completion Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs font-semibold text-slate-400">
-              <span>Overall Deliverable Progress</span>
-              <span>{progressPercent}% Complete</span>
+            {/* Completion Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold text-muted-foreground">
+                <span>Overall Deliverable Progress</span>
+                <span>{progressPercent}% Complete</span>
+              </div>
+              <div className="w-full h-3 bg-secondary rounded-full overflow-hidden border border-border">
+                <div 
+                  className="h-full bg-primary rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                ></div>
+              </div>
             </div>
-            <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800/80">
-              <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Milestones Section */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-900 pb-4">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
-              </svg>
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
               Project Milestones
             </h2>
             {project.status !== 'completed' && (
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowForm(!showForm)}
-                className="px-4 py-2 border border-slate-800 hover:border-slate-700 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                className="font-semibold flex items-center gap-1.5 rounded-xl border-border"
               >
                 {showForm ? 'Cancel' : 'Add Milestone'}
-              </button>
+              </Button>
             )}
           </div>
 
           {/* Milestone Add Form */}
           {showForm && (
-            <div className="p-6 bg-slate-900/30 border border-slate-800 rounded-2xl max-w-xl">
-              <h3 className="text-lg font-bold text-white mb-4">Add Project Milestone</h3>
-              {formError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-                  {formError}
-                </div>
-              )}
-              <form onSubmit={handleCreateMilestone} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Milestone Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none"
-                    placeholder="Milestone 1: Scaffold Directory Structures"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows="2"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none resize-none"
-                    placeholder="Deliverables included..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Billing Amount (INR)
-                    </label>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none"
-                      placeholder="e.g. 20000"
+            <Card className="shadow-sm max-w-xl">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-primary" />
+                  Add Project Milestone
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {formError && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+                <form onSubmit={handleCreateMilestone} className="space-y-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="milestoneTitle" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Milestone Title
+                    </Label>
+                    <Input
+                      id="milestoneTitle"
+                      required
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Milestone 1: Scaffold Directory Structures"
+                      className="rounded-xl border border-border bg-background text-foreground"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 outline-none"
+                  <div className="space-y-1">
+                    <Label htmlFor="milestoneDesc" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Description
+                    </Label>
+                    <textarea
+                      id="milestoneDesc"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows="2"
+                      className="w-full px-3 py-2 bg-background border border-border focus:border-primary/80 rounded-xl text-foreground text-sm outline-none resize-none"
+                      placeholder="Figma layouts or server configurations..."
                     />
                   </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all duration-200"
-                >
-                  {formLoading ? 'Saving...' : 'Add Milestone'}
-                </button>
-              </form>
-            </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="milestoneAmount" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Billing Amount (INR)
+                      </Label>
+                      <Input
+                        id="milestoneAmount"
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="e.g. 20000"
+                        className="rounded-xl border border-border bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="milestoneDueDate" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Due Date
+                      </Label>
+                      <Input
+                        id="milestoneDueDate"
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="rounded-xl border border-border bg-background text-slate-600"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    className="rounded-xl"
+                  >
+                    {formLoading ? 'Saving...' : 'Add Milestone'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Milestones Card list */}
+          {/* Milestones list */}
           <div className="space-y-4">
             {milestones.length > 0 ? (
               milestones.map((m) => (
@@ -319,60 +349,62 @@ const ProjectDetailPage = () => {
                   key={m._id}
                   className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                     m.isCompleted
-                      ? 'bg-slate-950/20 border-slate-900/50 opacity-75'
-                      : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-700/50'
+                      ? 'bg-muted/10 border-border/50 opacity-75'
+                      : 'bg-card text-card-foreground border-border hover:shadow-sm'
                   }`}
                 >
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h4 className="font-bold text-white text-base">{m.title}</h4>
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h4 className="font-bold text-foreground text-base">{m.title}</h4>
                       {m.isCompleted ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                          </svg>
+                        <Badge variant="default" className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
                           Completed
-                        </span>
+                        </Badge>
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-500/10 border border-slate-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Pending</span>
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Pending
+                        </Badge>
                       )}
                     </div>
-                    {m.description && <p className="text-xs text-slate-400 max-w-xl">{m.description}</p>}
+                    {m.description && <p className="text-xs text-muted-foreground max-w-xl">{m.description}</p>}
                     
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-2 font-mono">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground font-mono mt-2">
                       <span>Due: {formatDate(m.dueDate)}</span>
                       {m.isCompleted && m.completedAt && (
-                        <span className="text-slate-600">Settled: {formatDate(m.completedAt)}</span>
+                        <span className="text-muted-foreground/60">Settled: {formatDate(m.completedAt)}</span>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-6 sm:text-right border-t sm:border-t-0 border-slate-800/50 pt-3 sm:pt-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-6 sm:text-right border-t sm:border-t-0 border-border/50 pt-3 sm:pt-0">
                     <div>
-                      <span className="block text-[9px] text-slate-500 uppercase tracking-wider">Milestone Value</span>
-                      <span className="text-sm font-bold text-slate-200">{m.amount ? formatCurrency(m.amount) : 'TBD'}</span>
+                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60">Milestone Value</span>
+                      <span className="text-sm font-bold text-foreground">{m.amount ? formatCurrency(m.amount) : 'TBD'}</span>
                     </div>
 
                     {!m.isCompleted && project.status !== 'completed' && (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleCompleteMilestone(m._id)}
-                        className="px-4 py-2 border border-indigo-500/30 hover:border-indigo-500 bg-indigo-500/5 hover:bg-indigo-500/15 text-indigo-400 hover:text-indigo-300 rounded-xl text-xs font-semibold transition-all duration-200"
+                        className="hover:border-primary hover:bg-primary/10 hover:text-primary rounded-xl"
                       >
                         Mark Complete
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
               ))
             ) : (
-              <div className="p-8 bg-slate-900/10 border border-slate-800 border-dashed rounded-2xl text-center text-slate-500 text-sm">
+              <div className="p-8 bg-card text-card-foreground border border-border border-dashed rounded-2xl text-center text-muted-foreground text-sm shadow-sm">
                 No milestones added to this project yet. Add one to track progress.
               </div>
             )}
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

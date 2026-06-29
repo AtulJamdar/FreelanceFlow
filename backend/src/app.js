@@ -20,7 +20,10 @@ const app = express();
 
 // Global Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: [config.frontendUrl, 'http://localhost:3000'],
+  credentials: true
+}));
 
 if (config.nodeEnv !== 'production') {
   app.use(morgan('dev'));

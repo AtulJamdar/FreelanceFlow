@@ -1,8 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
-import Navbar from '../components/Navbar';
-import Badge from '../components/Badge';
+import DashboardLayout from '../components/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { AlertCircle, Calendar, DollarSign, FolderKanban, Plus, ArrowRight } from 'lucide-react';
 
 const ProjectsPage = () => {
   const [projects, setProjects] = useState([]);
@@ -11,8 +30,8 @@ const ProjectsPage = () => {
   const [error, setError] = useState(null);
 
   // Filters
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterClient, setFilterClient] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterClient, setFilterClient] = useState('ALL');
 
   // Form states
   const [showModal, setShowModal] = useState(false);
@@ -39,8 +58,8 @@ const ProjectsPage = () => {
   const fetchProjects = async () => {
     try {
       let queryParams = '?isArchived=false';
-      if (filterStatus) queryParams += `&status=${filterStatus}`;
-      if (filterClient) queryParams += `&clientId=${filterClient}`;
+      if (filterStatus && filterStatus !== 'ALL') queryParams += `&status=${filterStatus}`;
+      if (filterClient && filterClient !== 'ALL') queryParams += `&clientId=${filterClient}`;
 
       const response = await api.get(`/projects${queryParams}`);
       if (response.data && response.data.success) {
@@ -76,7 +95,6 @@ const ProjectsPage = () => {
       });
 
       if (response.data && response.data.success) {
-        // Reset form
         setTitle('');
         setDescription('');
         setClientId('');
@@ -84,7 +102,7 @@ const ProjectsPage = () => {
         setDeadline('');
         setTotalBudget('');
         setShowModal(false);
-        fetchProjects(); // refresh list
+        fetchProjects();
       }
     } catch (err) {
       console.error(err);
@@ -98,7 +116,7 @@ const ProjectsPage = () => {
     try {
       const response = await api.put(`/projects/${projectId}`, { status: newStatus });
       if (response.data && response.data.success) {
-        fetchProjects(); // refresh list
+        fetchProjects();
       }
     } catch (err) {
       console.error(err);
@@ -122,79 +140,214 @@ const ProjectsPage = () => {
     });
   };
 
+  const getProjectBadgeVariant = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'default'; // emerald
+      case 'in_progress':
+        return 'secondary'; // blue
+      case 'on_hold':
+        return 'outline'; // amber
+      default:
+        return 'outline'; // slate
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="relative w-16 h-16">
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-indigo-500/20 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="relative w-16 h-16 animate-pulse">
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-primary/20 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-t-primary rounded-full animate-spin"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <Navbar />
-
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-900 pb-6">
+    <DashboardLayout title="Projects">
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">Projects</h1>
-            <p className="text-sm text-slate-500 mt-1">Track deliverables, deadlines, and milestones</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Projects</h1>
+            <p className="text-sm text-muted-foreground mt-1">Track project timelines, status, and deliverables</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md transition-all duration-200 self-start sm:self-center flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-            </svg>
-            New Project
-          </button>
+
+          <Dialog open={showModal} onOpenChange={setShowModal}>
+            <DialogTrigger asChild>
+              <Button className="font-semibold flex items-center gap-2 rounded-xl">
+                <Plus className="w-4 h-4" />
+                New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg bg-card text-card-foreground border border-border rounded-2xl shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                  <FolderKanban className="w-5 h-5 text-primary" />
+                  Create New Project
+                </DialogTitle>
+              </DialogHeader>
+
+              {formError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateProject} className="space-y-4 pt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="projectTitle" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Project Title
+                  </Label>
+                  <Input
+                    id="projectTitle"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="E-Commerce Redesign"
+                    className="rounded-xl border border-border bg-background text-foreground"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="projectDesc" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Description
+                  </Label>
+                  <textarea
+                    id="projectDesc"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows="3"
+                    className="w-full px-3 py-2 bg-background border border-border focus:border-primary/80 rounded-xl text-foreground text-sm outline-none resize-none"
+                    placeholder="Deliverable CMS portals or requirements"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Assign Client
+                  </Label>
+                  <Select value={clientId} onValueChange={setClientId}>
+                    <SelectTrigger className="rounded-xl border border-border bg-background text-foreground">
+                      <SelectValue placeholder="Select a Client..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => (
+                        <SelectItem key={c._id} value={c._id}>
+                          {c.name} {c.company ? `(${c.company})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="startDate" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Start Date
+                    </Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      required
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="deadlineDate" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Deadline Date
+                    </Label>
+                    <Input
+                      id="deadlineDate"
+                      type="date"
+                      value={deadline}
+                      onChange={(e) => setDeadline(e.target.value)}
+                      className="rounded-xl border border-border bg-background text-foreground"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="projectBudget" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Total Budget (INR)
+                  </Label>
+                  <Input
+                    id="projectBudget"
+                    type="number"
+                    value={totalBudget}
+                    onChange={(e) => setTotalBudget(e.target.value)}
+                    placeholder="e.g. 50000"
+                    className="rounded-xl border border-border bg-background text-foreground"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                    className="rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    className="rounded-xl"
+                  >
+                    {formLoading ? 'Saving...' : 'Create Project'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 text-sm text-red-400">
-            <svg className="w-5 h-5 flex-shrink-0 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-2xl flex gap-3 text-sm text-destructive">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Filter controls */}
-        <div className="flex flex-wrap gap-4 p-4 bg-slate-900/30 border border-slate-800 rounded-2xl">
-          <div className="w-full sm:w-auto">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Filter by Status</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 text-sm outline-none transition-colors w-full min-w-[160px]"
-            >
-              <option value="">All Statuses</option>
-              <option value="not_started">Not Started</option>
-              <option value="in_progress">In Progress</option>
-              <option value="on_hold">On Hold</option>
-              <option value="completed">Completed</option>
-            </select>
+        {/* Filter Controls */}
+        <div className="flex flex-wrap gap-4 p-4 bg-card text-card-foreground border border-border rounded-2xl shadow-sm">
+          <div className="flex flex-col gap-1 w-full sm:w-auto min-w-[160px]">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Filter by Status</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="rounded-xl border border-border bg-background text-foreground h-9">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Statuses</SelectItem>
+                <SelectItem value="not_started">Not Started</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="on_hold">On Hold</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="w-full sm:w-auto">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Filter by Client</label>
-            <select
-              value={filterClient}
-              onChange={(e) => setFilterClient(e.target.value)}
-              className="px-4 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 text-sm outline-none transition-colors w-full min-w-[200px]"
-            >
-              <option value="">All Clients</option>
-              {clients.map(c => (
-                <option key={c._id} value={c._id}>{c.name} {c.company ? `(${c.company})` : ''}</option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-1 w-full sm:w-auto min-w-[200px]">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Filter by Client</Label>
+            <Select value={filterClient} onValueChange={setFilterClient}>
+              <SelectTrigger className="rounded-xl border border-border bg-background text-foreground h-9">
+                <SelectValue placeholder="All Clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Clients</SelectItem>
+                {clients.map(c => (
+                  <SelectItem key={c._id} value={c._id}>
+                    {c.name} {c.company ? `(${c.company})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -202,204 +355,79 @@ const ProjectsPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.length > 0 ? (
             projects.map((proj) => (
-              <div
+              <Card
                 key={proj._id}
-                className="bg-slate-900/40 border border-slate-800/80 hover:border-slate-700/50 rounded-2xl p-6 flex flex-col justify-between hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
+                className="shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between"
               >
-                <div>
-                  <div className="flex justify-between items-start gap-2 mb-4">
-                    <span className="text-xs text-slate-500 font-mono">
+                <CardHeader className="pb-4">
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
                       {proj.clientId?.company || proj.clientId?.name}
                     </span>
-                    <Badge status={proj.status} />
+                    <Badge variant={getProjectBadgeVariant(proj.status)}>
+                      {proj.status.replace('_', ' ').toUpperCase()}
+                    </Badge>
                   </div>
-
-                  <h3 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">
+                  <CardTitle className="text-xl font-bold text-foreground hover:text-primary transition-colors">
                     <Link to={`/projects/${proj._id}`} className="hover:underline">
                       {proj.title}
                     </Link>
-                  </h3>
-
-                  <p className="text-sm text-slate-400 line-clamp-2 mb-6">
+                  </CardTitle>
+                  <CardDescription className="text-sm text-muted-foreground line-clamp-2 mt-2">
                     {proj.description || 'No description provided.'}
-                  </p>
-                </div>
+                  </CardDescription>
+                </CardHeader>
 
-                <div className="border-t border-slate-800/50 pt-4 space-y-4">
-                  <div className="flex justify-between text-xs text-slate-400">
+                <CardContent className="border-t border-border/50 pt-4 space-y-4">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Budget</span>
-                      <span className="font-semibold text-slate-200">{proj.totalBudget ? formatCurrency(proj.totalBudget) : 'TBD'}</span>
+                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60">Budget</span>
+                      <span className="font-semibold text-foreground">{proj.totalBudget ? formatCurrency(proj.totalBudget) : 'TBD'}</span>
                     </div>
                     <div className="text-right">
-                      <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Deadline</span>
-                      <span className="font-semibold text-slate-200">{formatDate(proj.deadline)}</span>
+                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60">Deadline</span>
+                      <span className="font-semibold text-foreground">{formatDate(proj.deadline)}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center gap-4 pt-2">
                     <Link
                       to={`/projects/${proj._id}`}
-                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
                     >
                       Milestones
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
 
                     {/* Quick status change selector */}
                     {proj.status !== 'completed' && (
-                      <select
+                      <Select
                         value={proj.status}
-                        onChange={(e) => handleStatusChange(proj._id, e.target.value)}
-                        className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                        onValueChange={(val) => handleStatusChange(proj._id, val)}
                       >
-                        <option value="not_started">Not Started</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="on_hold">On Hold</option>
-                        <option value="completed">Completed</option>
-                      </select>
+                        <SelectTrigger className="px-2.5 py-1 bg-background border border-border rounded-lg text-xs text-foreground cursor-pointer h-7">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="not_started">Not Started</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="on_hold">On Hold</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))
           ) : (
-            <div className="col-span-full p-12 bg-slate-900/20 border border-slate-800/80 border-dashed rounded-2xl text-center text-slate-500 text-sm">
-              No projects found matching the filters. Create a new project to get started.
+            <div className="col-span-full p-12 bg-card text-card-foreground border border-border border-dashed rounded-2xl text-center text-muted-foreground text-sm shadow-sm">
+              No projects found. Create a new project to get started.
             </div>
           )}
         </div>
-
-        {/* Create Project Modal */}
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-            <div className="w-full max-w-lg p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl relative">
-              <button
-                onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-
-              <h2 className="text-2xl font-bold text-white mb-6">Create New Project</h2>
-
-              {formError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-                  {formError}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateProject} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Project Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                    placeholder="E-Commerce Redesign"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows="3"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors resize-none"
-                    placeholder="Short description of deliverables"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Assign Client
-                  </label>
-                  <select
-                    required
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 outline-none transition-colors"
-                  >
-                    <option value="">Select a Client...</option>
-                    {clients.map(c => (
-                      <option key={c._id} value={c._id}>{c.name} {c.company ? `(${c.company})` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Deadline Date
-                    </label>
-                    <input
-                      type="date"
-                      value={deadline}
-                      onChange={(e) => setDeadline(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-slate-300 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    Total Project Budget (INR)
-                  </label>
-                  <input
-                    type="number"
-                    value={totalBudget}
-                    onChange={(e) => setTotalBudget(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-colors"
-                    placeholder="e.g. 50000"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={formLoading}
-                    className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all duration-200"
-                  >
-                    {formLoading ? 'Saving...' : 'Create Project'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

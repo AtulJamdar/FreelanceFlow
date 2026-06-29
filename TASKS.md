@@ -565,7 +565,7 @@
 
 ---
 
-- [ ] **T-057 — Backend Deployment (Render)**
+- [x] **T-057 — Backend Deployment (Render)**
   - **Description:** Deploy backend to Render Web Service. Set all environment variables in Render dashboard (`MONGODB_URI`, `JWT_SECRET`, `SMTP_*`, `NODE_ENV=production`, `FRONTEND_URL`). Verify: `/api/v1/auth/register` responds from the public Render URL. Update CORS origin to Vercel URL.
   - **Files to create/modify:** `render.yaml` (optional), `src/app.js` (CORS config)
   - **Depends On:** T-048, T-051
@@ -573,7 +573,7 @@
 
 ---
 
-- [ ] **T-058 — Frontend Deployment + Repo Polish**
+- [x] **T-058 — Frontend Deployment + Repo Polish**
   - **Description:** Deploy frontend to Vercel with `VITE_API_BASE_URL` set to Render backend URL. Then polish the repo: write `README.md` (setup, env vars, deploy guide), add `api-tests/FreelanceFlow.http` master collection, verify `.gitignore` covers all sensitive files, add `.env.example` with placeholder values.
   - **Files to create/modify:** `README.md`, `.env.example`, `api-tests/FreelanceFlow.http`
   - **Depends On:** T-056, T-057
@@ -587,31 +587,31 @@ These 5 milestones mark meaningful checkpoints. Celebrate each one — they repr
 
 ---
 
-- [ ] **🏁 Milestone 1 — Server is Alive**
+- [x] **🏁 Milestone 1 — Server is Alive**
   > Express app running, connected to MongoDB Atlas, all folders in place, health check endpoint returns 200.  
   > **Tasks complete:** T-001 through T-008
 
 ---
 
-- [ ] **🔐 Milestone 2 — Auth Working End-to-End**
+- [x] **🔐 Milestone 2 — Auth Working End-to-End**
   > Freelancer can register, log in, receive a JWT, and access a protected route. Unauthenticated requests are rejected with 401.  
   > **Tasks complete:** T-009 through T-014
 
 ---
 
-- [ ] **📋 Milestone 3 — Full Project Lifecycle Working**
+- [x] **📋 Milestone 3 — Full Project Lifecycle Working**
   > Can create a client, create a project under that client, add milestones, and mark them complete — all via authenticated API calls. Pagination and filtering work on list endpoints.  
   > **Tasks complete:** T-015 through T-030
 
 ---
 
-- [ ] **📄 Milestone 4 — First Invoice PDF Generated and Emailed**
+- [x] **📄 Milestone 4 — First Invoice PDF Generated and Emailed**
   > Invoice created from milestone data, PDF downloaded and opens correctly, email with PDF attachment arrives in client inbox. Payment recorded and invoice auto-marks as paid.  
   > **Tasks complete:** T-031 through T-044
 
 ---
 
-- [ ] **🚀 Milestone 5 — Fully Deployed and Portfolio-Ready**
+- [x] **🚀 Milestone 5 — Fully Deployed and Portfolio-Ready**
   > Backend on Render, frontend on Vercel, cron job registered and demo-triggerable, README complete, all API tests passing against production URLs.  
   > **Tasks complete:** T-045 through T-058
 

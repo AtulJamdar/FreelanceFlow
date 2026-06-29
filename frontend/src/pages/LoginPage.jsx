@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertCircle, Lock } from 'lucide-react';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -27,80 +32,80 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-background relative overflow-hidden">
       {/* Background gradients */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl"></div>
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
 
-      <div className="w-full max-w-md p-8 bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl relative z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 mb-4 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-2xl shadow-lg">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+      <Card className="w-full max-w-md shadow-lg border border-border relative z-10 bg-card text-card-foreground rounded-2xl">
+        <CardHeader className="text-center pb-4">
+          <div className="mx-auto inline-flex items-center justify-center p-3 mb-3 bg-primary/10 border border-primary/20 rounded-2xl">
+            <Lock className="w-6 h-6 text-primary" />
           </div>
-          <h2 className="text-3xl font-extrabold text-white">Welcome Back</h2>
-          <p className="mt-2 text-sm text-slate-400">Log in to manage your freelance business</p>
-        </div>
+          <CardTitle className="text-2xl font-extrabold text-foreground tracking-tight">Welcome Back</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground mt-1">Log in to manage your freelance portal</CardDescription>
+        </CardHeader>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-3 text-sm text-red-400">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
+        <CardContent className="space-y-6">
+          {error && (
+            <div className="p-3.5 bg-destructive/10 border border-destructive/20 rounded-xl flex gap-3 text-xs text-destructive font-medium">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-all duration-200"
-              placeholder="you@example.com"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Email Address
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="rounded-xl border border-border bg-background text-foreground"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-white outline-none transition-all duration-200"
-              placeholder="••••••••"
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pass" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Password
+              </Label>
+              <Input
+                id="pass"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="rounded-xl border border-border bg-background text-foreground"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-            ) : (
-              'Log In'
-            )}
-          </button>
-        </form>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl font-semibold shadow-sm transition-colors mt-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-primary-foreground/20 border-t-primary-foreground rounded-full animate-spin"></div>
+              ) : (
+                'Log In'
+              )}
+            </Button>
+          </form>
 
-        <p className="mt-8 text-center text-sm text-slate-500">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
-            Register here
-          </Link>
-        </p>
-      </div>
+          <p className="text-center text-xs text-muted-foreground pt-2">
+            Don't have an account?{' '}
+            <Link to="/register" className="font-bold text-primary hover:underline transition-colors">
+              Register here
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };

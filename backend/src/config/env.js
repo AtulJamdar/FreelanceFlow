@@ -27,5 +27,6 @@ module.exports = {
   emailPass: process.env.EMAIL_PASS,
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
-  cronTimezone: process.env.CRON_TIMEZONE || 'Asia/Kolkata'
+  cronTimezone: process.env.CRON_TIMEZONE || 'Asia/Kolkata',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000'
 };

@@ -1,0 +1,215 @@
+# FreelanceFlow End-to-End API Master Test Suite
+# Follow these requests in sequence to test the entire project lifecycle.
+
+@baseUrl = http://localhost:5000/api/v1
+@contentType = application/json
+
+### =================================================================
+### 1. AUTHENTICATION & SIGN UP (Phase 2)
+### =================================================================
+
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "password": "password123",
+  "businessName": "Jane Doe Consulting"
+}
+
+###
+
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "jane.doe@example.com",
+  "password": "password123"
+}
+
+###
+
+# Save auth token from login response
+@authToken = {{login.response.body.data.token}}
+
+### Get Current Freelancer Profile
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 2. CLIENT MANAGEMENT (Phase 3)
+### =================================================================
+
+# @name createClient
+POST {{baseUrl}}/clients
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "name": "Acme Corporation",
+  "email": "billing@acme.com",
+  "company": "Acme Corp Ltd",
+  "phone": "+919988776655",
+  "address": "123 Business Park, Mumbai, India",
+  "notes": "Prefers invoices sent via email."
+}
+
+###
+
+@clientId = {{createClient.response.body.data._id}}
+
+### List Active Clients
+GET {{baseUrl}}/clients?isArchived=false
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 3. PROJECT & MILESTONES MANAGEMENT (Phase 4)
+### =================================================================
+
+# @name createProject
+POST {{baseUrl}}/projects
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "clientId": "{{clientId}}",
+  "title": "Corporate Website Overhaul",
+  "description": "Redesign corporate landing pages and backend CMS.",
+  "startDate": "2026-06-01",
+  "deadline": "2026-08-30",
+  "totalBudget": 90000
+}
+
+###
+
+@projectId = {{createProject.response.body.data._id}}
+
+### List Projects
+GET {{baseUrl}}/projects?status=in_progress
+Authorization: Bearer {{authToken}}
+
+---
+
+# @name createMilestone1
+POST {{baseUrl}}/projects/{{projectId}}/milestones
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Phase 1: Design Mockups & Approvals",
+  "description": "Figma files and static prototype approvals.",
+  "amount": 40000,
+  "dueDate": "2026-07-15"
+}
+
+###
+
+@milestoneId1 = {{createMilestone1.response.body.data._id}}
+
+---
+
+# @name createMilestone2
+POST {{baseUrl}}/projects/{{projectId}}/milestones
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Phase 2: Development & Final Launch",
+  "description": "React integration, API configurations, and production deploy.",
+  "amount": 50000,
+  "dueDate": "2026-08-15"
+}
+
+###
+
+@milestoneId2 = {{createMilestone2.response.body.data._id}}
+
+---
+
+### List Milestones for Project
+GET {{baseUrl}}/projects/{{projectId}}/milestones
+Authorization: Bearer {{authToken}}
+
+---
+
+### Complete Milestone 1 (Triggers milestone completion flag)
+PATCH {{baseUrl}}/milestones/{{milestoneId1}}/complete
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 4. INVOICES (Phase 5)
+### =================================================================
+
+# @name createInvoice
+POST {{baseUrl}}/invoices
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "projectId": "{{projectId}}",
+  "dueDate": "2026-07-25",
+  "taxRate": 18,
+  "autoPopulate": true,
+  "notes": "Bank transfer preferred. Account: 1234567890."
+}
+
+###
+
+@invoiceId = {{createInvoice.response.body.data._id}}
+
+### Get Invoice Details (Shows calculated tax, subtotal, total)
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: Bearer {{authToken}}
+
+### Send Invoice Email to Client (Fires Nodemailer template & attachments)
+POST {{baseUrl}}/invoices/{{invoiceId}}/send
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 5. PAYMENTS RECORDING (Phase 6)
+### =================================================================
+
+# @name recordPartialPayment
+POST {{baseUrl}}/invoices/{{invoiceId}}/payments
+Content-Type: {{contentType}}
+Authorization: Bearer {{authToken}}
+
+{
+  "amount": 20000,
+  "method": "bank_transfer",
+  "paymentDate": "2026-06-28T12:00:00Z",
+  "referenceNumber": "TXN_998811"
+}
+
+###
+
+@paymentId = {{recordPartialPayment.response.body.data._id}}
+
+### List Payments for Invoice
+GET {{baseUrl}}/invoices/{{invoiceId}}/payments
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 6. DASHBOARD & ANALYTICS (Phase 8)
+### =================================================================
+
+### Fetch Dashboard Analytics (Calculates Gross Billed, Paid, and Outstanding balances)
+GET {{baseUrl}}/dashboard
+Authorization: Bearer {{authToken}}
+
+
+### =================================================================
+### 7. SYSTEM AUTOMATION & DEV UTILITIES (Phase 7)
+### =================================================================
+
+### Trigger Daily Overdue Scans Manually (Dev-only endpoint)
+POST {{baseUrl}}/dev/trigger-overdue
+Authorization: Bearer {{authToken}}
