@@ -50,6 +50,10 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.status(200).json({message:"FreelanceFlow Backend API is running."});
+});
+
 // Fallback 404 Handler for undefined routes
 app.use((req, res, next) => {
   const err = new Error(`Route not found: ${req.originalUrl}`);
