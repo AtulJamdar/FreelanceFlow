@@ -145,3 +145,4 @@ We provide a master API request suite in [FreelanceFlow.http](file:///d:/Project
 3. Framework Preset: **Vite**
 4. Configure Build Command as `npm run build` and Output Directory as `dist`.
 5. Set `VITE_API_BASE_URL` in Vercel to your public Render service URL (`https://your-backend.onrender.com/api/v1`).
+6. dlfkasj
